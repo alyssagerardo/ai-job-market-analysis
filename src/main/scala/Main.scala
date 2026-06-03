@@ -29,6 +29,13 @@ object Main {
     features: Array[Double]
   )
 
+  case class PCA(
+    job: Job,
+    cluster: Int,
+    x: Double,
+    y: Double
+  )
+
   def parse_lines(line: String): Array[String] = {
     line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1)
       .map(_.trim.replaceAll("^\"|\"$", ""))
@@ -157,6 +164,51 @@ object Main {
     )
   }
 
+  def pca(clustered: Array[(Job2, Int)]): Array[PCA] = {
+    val num_features = clustered(0)._1.features.length
+    val means = Array.fill(num_features)(0.0)
+
+    for ((point, cluster) <- clustered) {
+      for (i <- 0 until num_features) {
+        means(i) += point.features(i)
+      }
+    }
+    for (i <- 0 until num_features) {
+      means(i) = means(i) / clustered.length
+    }
+
+    clustered.map {
+      case (point, cluster) =>
+        val centered = point.features.indices.map { i =>
+          point.features(i) - means(i)
+        }.toArray
+
+        PCA(
+          point.job,
+          cluster,
+          centered(0),
+          centered(2)
+        )
+    }
+  }
+
+  def silhouette_score(clustered: Array[(Job2, Int)]): Double = {
+    /*
+    Silhouette Score
+
+    For each point:
+    a = average distance to points in same cluster
+    b = average distance to points in nearest different clusters
+    s = (b - a) / max(a, b)
+    Average all s values to get the final silhouette score.
+
+    After implementing function, test and jot down results for multiple k-values:
+    k = 2, k = 3, k = 4, k = 5, k = 6
+    For each k, run k-means function, compute the silhouette score, and record results.
+    Chose k with the highest average silhouette score.
+     */
+  }
+
   def main(args: Array[String]): Unit = {
     val conf = new SparkConf()
       .setAppName("Main")
@@ -178,11 +230,17 @@ object Main {
     val normalized_array = normalize_features((jobs2.collect()))
     val normalized_job2 = sc.parallelize(normalized_array)
 
+    // This is where you change the k value.
     val clustered = kmeans(normalized_job2, 4, 10)
-    clustered.take(20).foreach {
-      case (point, cluster) =>
-        println(point.job.job_id + " -> cluster " + cluster)
+    val pca_points = pca(clustered.collect())
+
+    pca_points.take(20).foreach { p =>
+      println(
+        p.job.job_id +
+        " -> cluster " + p.cluster +
+        ", x = " + p.x +
+        ", y = " + p.y
+      )
     }
-    sc.stop()
   }
 }
