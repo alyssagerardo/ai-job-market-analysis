@@ -1,47 +1,46 @@
 import org.apache.spark.{SparkConf, SparkContext}
 
 object Main {
-
   case class Job(
-    job_id: String,
-    job_title: String,
-    salary_usd: Double,
-    salary_currency: String,
-    experience_level: String,
-    employment_type: String,
-    company_location: String,
-    company_size: String,
-    employee_residence: String,
-    remote_ratio: Double,
-    required_skills: String,
-    education_required: String,
-    years_experience: Double,
+    jobID: String,
+    jobTitle: String,
+    salaryUSD: Double,
+    salaryCurrency: String,
+    experienceLevel: String,
+    employmentType: String,
+    companyLocation: String,
+    companySize: String,
+    employeeResidence: String,
+    remoteRatio: Double,
+    requiredSkills: String,
+    educationRequired: String,
+    yearsExperience: Double,
     industry: String,
-    posting_date: String,
-    application_deadline: String,
-    job_description_length: Double,
-    benefits_score: Double,
-    company_name: String
+    postingDate: String,
+    applicationDeadline: String,
+    jobDescriptionLength: Double,
+    benefitsScore: Double,
+    companyName: String
   )
 
-  case class Job2(
+  case class JobPoint(
     job: Job,
     features: Array[Double]
   )
 
-  case class PCA(
+  case class PCAResult(
     job: Job,
     cluster: Int,
     x: Double,
     y: Double
   )
 
-  def parse_lines(line: String): Array[String] = {
+  def parseLines(line: String): Array[String] = {
     line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1)
       .map(_.trim.replaceAll("^\"|\"$", ""))
   }
 
-  def normalize_features(data: Array[Job2]): Array[Job2] = {
+  def normalizeFeatures(data: Array[JobPoint]): Array[JobPoint] = {
     val num_features = data(0).features.length
 
     val min = Array.fill(num_features)(Double.MaxValue)
@@ -68,7 +67,7 @@ object Main {
         }
       }.toArray
 
-      Job2(point.job, normalized)
+      JobPoint(point.job, normalized)
     }
   }
 
@@ -80,9 +79,9 @@ object Main {
     )
   }
 
-  def kmeans(data: org.apache.spark.rdd.RDD[Job2],
+  def kmeans(data: org.apache.spark.rdd.RDD[JobPoint],
              k: Int,
-             iterations: Int): org.apache.spark.rdd.RDD[(Job2, Int)] = {
+             iterations: Int): org.apache.spark.rdd.RDD[(JobPoint, Int)] = {
 
     var centroids = data
       .takeSample(withReplacement = false, k, seed = 42)
@@ -128,7 +127,7 @@ object Main {
     }
   }
 
-  def to_job(cols: Array[String]): Job = {
+  def toJob(cols: Array[String]): Job = {
     Job(
       cols(0),
       cols(1),
@@ -152,19 +151,19 @@ object Main {
     )
   }
 
-  def to_job2(job: Job): Job2 = {
-    Job2(
+  def tojobPoint(job: Job): JobPoint = {
+    JobPoint(
       job,
       Array(
-        job.salary_usd,
-        job.remote_ratio,
-        job.years_experience,
-        job.benefits_score
+        job.salaryUSD,
+        job.remoteRatio,
+        job.yearsExperience,
+        job.benefitsScore
       )
     )
   }
 
-  def pca(clustered: Array[(Job2, Int)]): Array[PCA] = {
+  def pca(clustered: Array[(JobPoint, Int)]): Array[PCAResult] = {
     val num_features = clustered(0)._1.features.length
     val means = Array.fill(num_features)(0.0)
 
@@ -183,7 +182,7 @@ object Main {
           point.features(i) - means(i)
         }.toArray
 
-        PCA(
+        PCAResult(
           point.job,
           cluster,
           centered(0),
@@ -192,7 +191,7 @@ object Main {
     }
   }
 
-  def silhouette_score(clustered: Array[(Job2, Int)]): Double = {
+  def silhouetteScore(clustered: Array[(JobPoint, Int)]): Double = {
     /*
     Silhouette Score
 
@@ -207,6 +206,7 @@ object Main {
     For each k, run k-means function, compute the silhouette score, and record results.
     Chose k with the highest average silhouette score.
      */
+    0.0
   }
 
   def main(args: Array[String]): Unit = {
@@ -215,19 +215,19 @@ object Main {
       .setMaster("local[*]")
 
     val sc = new SparkContext(conf)
-    val file = sc.textFile("src/main/scala/ai_job_dataset.csv")
+    val file = sc.textFile("data/ai_job_dataset.csv")
     val header = file.first()
 
     val rows = file
       .filter(line => line != header)
-      .map(parse_lines)
+      .map(parseLines)
       .filter(cols => cols.length >= 19)
 
-    val jobs = rows.map(to_job)
+    val jobs = rows.map(toJob)
 
-    val jobs2 = jobs.map(to_job2)
+    val jobs2 = jobs.map(tojobPoint)
 
-    val normalized_array = normalize_features((jobs2.collect()))
+    val normalized_array = normalizeFeatures((jobs2.collect()))
     val normalized_job2 = sc.parallelize(normalized_array)
 
     // This is where you change the k value.
@@ -236,7 +236,7 @@ object Main {
 
     pca_points.take(20).foreach { p =>
       println(
-        p.job.job_id +
+        p.job.jobID +
         " -> cluster " + p.cluster +
         ", x = " + p.x +
         ", y = " + p.y
