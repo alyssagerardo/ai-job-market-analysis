@@ -23,10 +23,13 @@
     
         
         File -> Project Structure -> Project
+        
         Set Project SDK: Java 17
+        
         Set Language Level: 17
 
         File -> Project Structure -> Modules
+        
         Set Module SDK: Java 17
         
      7. If everything goes well, the project should now run!
