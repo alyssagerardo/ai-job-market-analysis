@@ -20,10 +20,13 @@
         java -version
         ```
      5. Configure IntelliJ
+    
+        
         File -> Project Structure -> Project
         Set Project SDK: Java 17
         Set Language Level: 17
 
         File -> Project Structure -> Modules
         Set Module SDK: Java 17
-     6. If everything goes well, the project should now run!
+        
+     7. If everything goes well, the project should now run!
