@@ -2,38 +2,38 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 object Main {
   case class Job(
-    jobID: String,
-    jobTitle: String,
-    salaryUSD: Double,
-    salaryCurrency: String,
-    experienceLevel: String,
-    employmentType: String,
-    companyLocation: String,
-    companySize: String,
-    employeeResidence: String,
-    remoteRatio: Double,
-    requiredSkills: String,
-    educationRequired: String,
-    yearsExperience: Double,
-    industry: String,
-    postingDate: String,
-    applicationDeadline: String,
-    jobDescriptionLength: Double,
-    benefitsScore: Double,
-    companyName: String
-  )
+                  jobID: String,
+                  jobTitle: String,
+                  salaryUSD: Double,
+                  salaryCurrency: String,
+                  experienceLevel: String,
+                  employmentType: String,
+                  companyLocation: String,
+                  companySize: String,
+                  employeeResidence: String,
+                  remoteRatio: Double,
+                  requiredSkills: String,
+                  educationRequired: String,
+                  yearsExperience: Double,
+                  industry: String,
+                  postingDate: String,
+                  applicationDeadline: String,
+                  jobDescriptionLength: Double,
+                  benefitsScore: Double,
+                  companyName: String
+                )
 
   case class JobPoint(
-    job: Job,
-    features: Array[Double]
-  )
+                       job: Job,
+                       features: Array[Double]
+                     )
 
   case class PCAResult(
-    job: Job,
-    cluster: Int,
-    x: Double,
-    y: Double
-  )
+                        job: Job,
+                        cluster: Int,
+                        x: Double,
+                        y: Double
+                      )
 
   def parseLines(line: String): Array[String] = {
     line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1)
@@ -192,21 +192,47 @@ object Main {
   }
 
   def silhouetteScore(clustered: Array[(JobPoint, Int)]): Double = {
-    /*
-    Silhouette Score
 
-    For each point:
-    a = average distance to points in same cluster
-    b = average distance to points in nearest different clusters
-    s = (b - a) / max(a, b)
-    Average all s values to get the final silhouette score.
+    val clusters = clustered.groupBy(_._2)
 
-    After implementing function, test and jot down results for multiple k-values:
-    k = 2, k = 3, k = 4, k = 5, k = 6
-    For each k, run k-means function, compute the silhouette score, and record results.
-    Chose k with the highest average silhouette score.
-     */
-    0.0
+    val scores = clustered.map {
+      case (point, clusterId) =>
+
+
+        val sameCluster = clusters(clusterId)
+            .map(_._1)
+            .filter(_ != point)
+
+        val a =
+          if (sameCluster.isEmpty) {
+            0.0
+          } else {
+            sameCluster
+              .map(other => distance(point.features, other.features))
+              .sum / sameCluster.length
+          }
+
+        val b =
+          clusters
+            .filter(_._1 != clusterId)
+            .values
+            .map { clusterPoints =>
+
+              clusterPoints.map(_._1)
+                .map(other => distance(point.features, other.features))
+                .sum / clusterPoints.length
+            }
+            .min
+
+
+        if (a == 0.0 && b == 0.0) {
+          0.0
+        } else {
+          (b - a) / math.max(a, b)
+        }
+    }
+
+    scores.sum / scores.length
   }
 
   def main(args: Array[String]): Unit = {
@@ -231,15 +257,56 @@ object Main {
     val normalized_job2 = sc.parallelize(normalized_array)
 
     // This is where you change the k value.
-    val clustered = kmeans(normalized_job2, 4, 10)
+    var bestK = 2
+    var bestScore = Double.MinValue
+
+    for (k <- 2 to 6) {
+
+
+      println("Testing K = " + k)
+
+      val clustered =
+        kmeans(
+          normalized_job2,
+          k,
+          10
+        )
+
+      val score =
+        silhouetteScore(
+          clustered.collect()
+        )
+
+      println(
+        "Silhouette Score = " + score
+      )
+
+      if (score > bestScore) {
+        bestScore = score
+        bestK = k
+      }
+    }
+
+
+    println("Best K = " + bestK)
+    println("Best Silhouette Score = " + bestScore)
+
+    val clustered =
+      kmeans(
+        normalized_job2,
+        bestK,
+        10
+      )
+
+
     val pca_points = pca(clustered.collect())
 
     pca_points.take(20).foreach { p =>
       println(
         p.job.jobID +
-        " -> cluster " + p.cluster +
-        ", x = " + p.x +
-        ", y = " + p.y
+          " -> cluster " + p.cluster +
+          ", x = " + p.x +
+          ", y = " + p.y
       )
     }
   }
