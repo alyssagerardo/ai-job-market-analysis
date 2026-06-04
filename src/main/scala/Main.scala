@@ -294,7 +294,7 @@ object Main {
     val clustered =
       kmeans(
         normalized_job2,
-        bestK,
+        4,
         10
       )
 
